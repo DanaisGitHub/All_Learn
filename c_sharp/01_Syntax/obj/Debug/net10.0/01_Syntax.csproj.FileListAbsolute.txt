@@ -1,0 +1,15 @@
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\bin\Debug\net10.0\01_Syntax.exe
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\bin\Debug\net10.0\01_Syntax.deps.json
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\bin\Debug\net10.0\01_Syntax.runtimeconfig.json
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\bin\Debug\net10.0\01_Syntax.dll
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\bin\Debug\net10.0\01_Syntax.pdb
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.AssemblyInfoInputs.cache
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.AssemblyInfo.cs
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.csproj.CoreCompileInputs.cache
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.sourcelink.json
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.dll
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\refint\01_Syntax.dll
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.pdb
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\01_Syntax.genruntimeconfig.cache
+C:\Users\DanaiZerai\msoftware\learn\c_sharp\01_Syntax\obj\Debug\net10.0\ref\01_Syntax.dll
