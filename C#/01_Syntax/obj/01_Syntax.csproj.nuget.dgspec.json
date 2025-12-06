@@ -1,31 +1,25 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\DanaiZerai\\msoftware\\learn\\c_sharp\\01_Syntax\\01_Syntax.csproj": {}
+    "/home/danai-zerai/msoftware/learn/All_Learn/C#/01_Syntax/01_Syntax.csproj": {}
   },
   "projects": {
-    "C:\\Users\\DanaiZerai\\msoftware\\learn\\c_sharp\\01_Syntax\\01_Syntax.csproj": {
+    "/home/danai-zerai/msoftware/learn/All_Learn/C#/01_Syntax/01_Syntax.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\DanaiZerai\\msoftware\\learn\\c_sharp\\01_Syntax\\01_Syntax.csproj",
+        "projectUniqueName": "/home/danai-zerai/msoftware/learn/All_Learn/C#/01_Syntax/01_Syntax.csproj",
         "projectName": "01_Syntax",
-        "projectPath": "C:\\Users\\DanaiZerai\\msoftware\\learn\\c_sharp\\01_Syntax\\01_Syntax.csproj",
-        "packagesPath": "C:\\Users\\DanaiZerai\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\DanaiZerai\\msoftware\\learn\\c_sharp\\01_Syntax\\obj\\",
+        "projectPath": "/home/danai-zerai/msoftware/learn/All_Learn/C#/01_Syntax/01_Syntax.csproj",
+        "packagesPath": "/home/danai-zerai/.nuget/packages/",
+        "outputPath": "/home/danai-zerai/msoftware/learn/All_Learn/C#/01_Syntax/obj/",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\DanaiZerai\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "/home/danai-zerai/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -65,7 +59,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.100/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/home/danai-zerai/.dotnet/sdk/10.0.100/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
