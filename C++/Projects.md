@@ -1,0 +1,6 @@
+- [ ]  **To-do list app** — classes, objects, basic encapsulation.
+- [ ]  **Simple calculator with expressions** — parsing, recursion, operator overloading practice.
+- [ ]  **File-based note manager** — file I/O, STL containers (vectors, maps), string manipulation.
+- [ ]  **2D game with SDL2** — pointers, memory management, game loop. This forces you to think about performance and lifecycle.
+- [ ]  **Snake or Tetris clone** — event handling, collision detection, state management. Harder than you think.
+- [ ]  **Build a JSON parser or mini HTTP server** — real systems work. Error handling, networking or parsing complexity

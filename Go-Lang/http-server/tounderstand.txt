@@ -1,0 +1,53 @@
+
+
+// chapter 1 l5
+
+// func main() {
+// 	file, err := os.Open(fileName)
+// 	if err != nil {
+// 		fmt.Printf("coudn't read file %s because: %v", fileName, file)
+// 		os.Exit(1)
+// 	}
+// 	lines := getLinesChannel(file)
+// 	for r := range lines {
+// 		fmt.Printf("read: %s\n", r)
+// 	}
+
+// }
+
+// func getLinesChannel(f io.ReadCloser) <-chan string {
+
+// 	chanString := make(chan string, 1)
+// 	go func() {
+// 		defer close(chanString)
+// 		defer f.Close()
+
+// 		eightBytes := make([]byte, 8)
+// 		var fullLine []byte
+// 		for {
+// 			n, err := f.Read(eightBytes)
+// 			if err != nil {
+// 				if err == io.EOF {
+// 					if len(fullLine) > 0 {
+// 						chanString <- string(fullLine)
+// 					}
+// 					return
+// 				}
+// 				fmt.Printf("couidn't read 8 bytes: %v", err)
+// 			}
+
+// 			for i := range n {
+// 				char := eightBytes[i]
+// 				if char == '\n' {
+// 					chanString <- string(fullLine)
+// 					fullLine = []byte{}
+// 					continue
+// 				}
+// 				fullLine = append(fullLine, char)
+// 			}
+// 		}
+// 	}()
+
+// 	return chanString
+// }
+
