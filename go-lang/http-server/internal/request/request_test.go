@@ -11,7 +11,12 @@ import (
 
 func TestRequestLineParse0(t *testing.T) {
 	// Test: Good GET Request line
-	r, err := RequestFromReader(strings.NewReader("GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n"))
+	str := "GET / HTTP/1.1\r\n" +
+		"Host: localhost:42069\r\n" +
+		"User-Agent: curl/7.81.0\r\n" +
+		"Accept: */*\r\n" +
+		"\r\n"
+	r, err := RequestFromReader(strings.NewReader(str))
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	require.Equal(t, "GET", r.RequestLine.Method)

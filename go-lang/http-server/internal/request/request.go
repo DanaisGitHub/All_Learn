@@ -75,12 +75,11 @@ func NewRequest() *Request {
 func (r *Request) parseHeaderLines(line []byte) (int, bool, error) {
 	idx := bytes.Index(line, NEWLINEb)
 	if idx == -1 {
-		return 0, false, nil
+		return -1, false, nil
 	}
-
 	n, requestDone, err := r.Headers.Parse(line)
 	if err != nil {
-		return -1, false, fmt.Errorf("couldn't parse header: %w\nn=%d\ndone=%v", err, n, requestDone)
+		return 0, false, fmt.Errorf("couldn't parse header: %w\nn=%d\ndone=%v", err, n, requestDone)
 	}
 	return idx + len(NEWLINEs), requestDone, nil
 
@@ -95,17 +94,19 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	r.Headers = headers.NewHeaders()
 	tempStr := ""
 
+Loop:
 	for {
 		n, err := reader.Read(chunk)
-		if err == io.EOF {
-			return nil, fmt.Errorf("EOF: %w", err)
+		if err == io.EOF && len(tempStr) == 0 { // last chunk + EOF
+			return nil, fmt.Errorf("EOF: %w", err) // if you get EOF before r.state == done, then there has to be an error
 		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("failed to read chunk:=> %w", err)
 		}
 		bytesRead += n
 
 		switch r.state {
+
 		case requestLine:
 			i := bytes.Index(chunk, []byte(NEWLINEs))
 			if i == -1 { //not found
@@ -121,26 +122,50 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			r.state = header
 
 		case header:
-			i := bytes.Index(chunk, NEWLINEb)
-			if i == -1 { //not found
-				tempStr += string(chunk)
-				break
+			if n == 0 && len(tempStr) > 0 { // no new chunk but still a temp string
+				// parse left temp str
+				// which could be errnous
+				_, done, err := r.parseHeaderLines([]byte(tempStr)) // end of headers not being noticed
+				if err != nil {
+					return nil, fmt.Errorf("couldn't parse chunk: %w", err)
+				}
+				if !done {
+					return nil, fmt.Errorf("headers malformed, got the then end of request and error occured: %w", err)
+
+				}
+
 			}
+			// index to newline /r/n
+			i := bytes.Index(chunk, NEWLINEb) // New chunk not updated still contained "*/*\r\n\r\n "
+			if i == -1 {                      //not found
+				tempStr += string(chunk)
+				continue Loop
+			}
+
 			tempStr += string(chunk[:i+len(NEWLINEb)])
-			_, done, err := r.parseHeaderLines([]byte(tempStr)) // ERROR: Cannot parse header malformed
+			n, done, err := r.parseHeaderLines([]byte(tempStr)) // end of headers not being noticed
 			if err != nil {
 				return nil, fmt.Errorf("couldn't parse chunk: %w", err)
 			}
+			if n != -1 { // newline found
+				tempStr = string(chunk[i+len(NEWLINEb):]) //remaining chunk
+			}
+			//flush chunk
+			chunk = make([]byte, 8)
 			if done {
+				tempStr = ""
 				r.state = body
+				break
 			}
 
 		case body:
 			fmt.Println("You are parsing the body now")
 			r.state = done
+			fallthrough
 
 		case done:
 			return r, nil
+
 		default:
 			return nil, fmt.Errorf("mismatched Request reading states")
 		}
