@@ -112,7 +112,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				tempStr += string(chunk)
 				break
 			}
-			tempStr += string(chunk)[:i+len([]byte(NEWLINEs))]
+			tempStr += string(chunk)[:i+len([]byte(NEWLINEs))] // ERROR: malformed "Host: localhost:42069\r\nser-Agen"
 			r.RequestLine, err = parseRequestLine(tempStr)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't create RequestLine structure %w", err)
