@@ -1,54 +1,58 @@
 package request
 
 import (
+	"bytes"
 	"fmt"
 	"http-server/internal/headers"
 	"io"
 	"strings"
 )
 
+const NEWLINEs string = "\r\n"
+
+var NEWLINEb = []byte(NEWLINEs)
+
+// Request States
 const (
 	initialized int = iota
-	parsingHeaders
-	   
+	requestLine
+	header
+	body
 	done
 )
 
-type Request struct {
-	RequestLine RequestLine
-	state       int
-	Headers     headers.Headers
-}
-
+// eg GET /coffee HTTP/1.1
 type RequestLine struct {
 	HttpVersion   string // 1.1 vs 2 vs ..
-	RequestTarget string //?
-	Method        string
+	RequestTarget string // /coffee
+	Method        string // GET, POST ....
 }
 
-const NEWLINE string = "\r\n"
+type Request struct {
+	RequestLine *RequestLine
+	state       int
+	Headers     headers.Headers // doesn't need to be a pointer
+}
 
-// GET /coffee HTTP/1.1
-// /r/n
-
-func parseRequestLine(s string) (*RequestLine, string, error) {
-	reqlI := strings.Index(s, NEWLINE)
-	if reqlI == -1 {
-		return nil, "", fmt.Errorf("no SEPARATOR = %v found", NEWLINE)
+// Parse and create the RequestLine which is just the first line of the whole request
+func parseRequestLine(s string) (*RequestLine, error) {
+	idx := strings.Index(s, NEWLINEs)
+	if idx == -1 {
+		return nil, fmt.Errorf("no SEPARATOR = %v found", NEWLINEs)
 	}
-	requestLine := s[:reqlI]
-	restOfReq := s[reqlI+len(NEWLINE)-1:]
+
+	requestLine := s[:idx]
 	// Seperate the Request line into 3 parts
 	splitReqLine := strings.Split(requestLine, " ")
 	if len(splitReqLine) != 3 {
-		return nil, restOfReq, fmt.Errorf("malformed request line spaces")
+		return nil, fmt.Errorf("malformed request line spaces")
 	}
 	httpVersion := strings.Split(splitReqLine[2], "/")
 	if len(httpVersion) != 2 {
-		return nil, restOfReq, fmt.Errorf("malformed http version")
+		return nil, fmt.Errorf("malformed http version")
 	}
 	if httpVersion[1] != "1.1" {
-		return nil, restOfReq, fmt.Errorf("wrong http version")
+		return nil, fmt.Errorf("wrong http version")
 
 	}
 	rl := &RequestLine{
@@ -56,71 +60,91 @@ func parseRequestLine(s string) (*RequestLine, string, error) {
 		Method:        splitReqLine[0],
 		RequestTarget: splitReqLine[1],
 	}
-	return rl, restOfReq, nil
+	return rl, nil
 }
 
-func NewRequest () *RequesNewRequestt{
+func NewRequest() *Request {
 	return &Request{
-		RequestLine: RequestLine{},
-		state: ,
+		RequestLine: &RequestLine{},
+		state:       initialized,
+		Headers:     headers.NewHeaders(),
 	}
+}
+
+// finds the position of sepator and return in i index including length of SEPARATOR
+func (r *Request) parseHeaderLines(line []byte) (int, bool, error) {
+	idx := bytes.Index(line, NEWLINEb)
+	if idx == -1 {
+		return 0, false, nil
+	}
+
+	n, requestDone, err := r.Headers.Parse(line)
+	if err != nil {
+		return -1, false, fmt.Errorf("couldn't parse header: %w\nn=%d\ndone=%v", err, n, requestDone)
+	}
+	return idx + len(NEWLINEs), requestDone, nil
+
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	r := new(Request)
-	chunk := make([]byte, 8)
-	streamBytes := make([]byte, 0)
+	chunk := make([]byte, 8) // at maximum 8 bytes will be read
 	bytesRead := 0
-	pos := 0
-	r.state = initialized
-	// read headers
+	r.state = requestLine
+
 	r.Headers = headers.NewHeaders()
+	tempStr := ""
 
 	for {
-		reqI, err := reader.Read(chunk)
-		bytesRead += reqI
-		streamBytes = append(streamBytes, chunk[:reqI]...)
-		if err != nil && err == io.EOF {
+		n, err := reader.Read(chunk)
+		if err == io.EOF {
 			return nil, fmt.Errorf("EOF: %w", err)
-
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to read chunk:=> %w", err)
 		}
-		num, err := r.parse(streamBytes)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't parse chunk: %w", err)
+		bytesRead += n
+
+		switch r.state {
+		case requestLine:
+			i := bytes.Index(chunk, []byte(NEWLINEs))
+			if i == -1 { //not found
+				tempStr += string(chunk)
+				break
+			}
+			tempStr += string(chunk)[:i+len([]byte(NEWLINEs))]
+			r.RequestLine, err = parseRequestLine(tempStr)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't create RequestLine structure %w", err)
+			}
+			tempStr = ""
+			r.state = header
+
+		case header:
+			i := bytes.Index(chunk, NEWLINEb)
+			if i == -1 { //not found
+				tempStr += string(chunk)
+				break
+			}
+			tempStr += string(chunk[:i+len(NEWLINEb)])
+			_, done, err := r.parseHeaderLines([]byte(tempStr)) // ERROR: Cannot parse header malformed
+			if err != nil {
+				return nil, fmt.Errorf("couldn't parse chunk: %w", err)
+			}
+			if done {
+				r.state = body
+			}
+
+		case body:
+			fmt.Println("You are parsing the body now")
+			r.state = done
+
+		case done:
+			return r, nil
+		default:
+			return nil, fmt.Errorf("mismatched Request reading states")
 		}
-		if r.state == done {
-			pos = num
-			break
-		}
+
 	}
-
-	firstLine := streamBytes[:pos]
-
-	rL, _, err := parseRequestLine(string(firstLine))
-	if err != nil {
-		return nil, fmt.Errorf("%w", err)
-	}
-	r.RequestLine = *rL
-
-	return r, nil
-
-}
-
-// finds the position of sepator and return in i index including length of SEPARATOR
-func (r *Request) parse(data []byte) (int, error) {
-
-	reqlI := strings.Index(string(data), NEWLINE)
-	n, requestDone, err := r.Headers.Parse(data)
-	if err != nil {
-		return -1, fmt.Errorf("couldn't parse header: %w\nn=%d\ndone=%v", err, n, requestDone)
-	}
-	if reqlI == -1 {
-		return 0, nil
-	}
-	r.state = done
-	return reqlI + len(NEWLINE), nil
 
 }

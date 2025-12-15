@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequestLineParse1(t *testing.T) {
+func TestHeaderWith1NormalFieldValPair(t *testing.T) {
 
 	// Test: Valid single header
 	headers := NewHeaders()
@@ -27,7 +27,7 @@ func TestRequestLineParse1(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 }
-func TestMultiLine(t *testing.T) {
+func TestHeaderWithMultiNormalFieldValPair(t *testing.T) {
 
 	// Test: Multi-field values
 	headers := NewHeaders()
