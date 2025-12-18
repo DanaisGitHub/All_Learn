@@ -43,7 +43,16 @@ This is a Go HTTP server learning project with the following components:
 5. The UDP client and TCP server use the same port (42069) which would cause conflicts
 
 ## Potential Issues
-1. Port conflict between UDP client and TCP server
+1. Port conflict between UDP client and TCP server (both use 42069)
 2. Some error messages have typos ("couidn't" instead of "couldn't")
 3. The request parser has complex state management that could be simplified
 4. No actual HTTP response handling - only request parsing
+
+## Recent Changes to Request Parser
+The student has refactored the request parser with improvements:
+- Created `appendAccumulator()` function for buffer management
+- Added `moveState()` function for standardized state transitions
+- Replaced `tempStr` with systematic `accumulator` pattern
+- Still has mixed responsibilities in main loop (reading + parsing)
+- EOF handling is commented out, indicating ongoing work
+- Complex accumulator lifecycle management remains
