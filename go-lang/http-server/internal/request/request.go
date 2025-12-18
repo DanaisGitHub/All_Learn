@@ -35,24 +35,25 @@ type Request struct {
 }
 
 // Parse and create the RequestLine which is just the first line of the whole request
-func parseRequestLine(s string) (*RequestLine, error) {
+func parseRequestLine(b []byte) (*RequestLine, bool, error) {
+	s := string(b)
 	idx := strings.Index(s, NEWLINEs)
 	if idx == -1 {
-		return nil, fmt.Errorf("no SEPARATOR = %v found", NEWLINEs)
+		return nil, false, nil
 	}
 
 	requestLine := s[:idx]
 	// Seperate the Request line into 3 parts
 	splitReqLine := strings.Split(requestLine, " ")
 	if len(splitReqLine) != 3 {
-		return nil, fmt.Errorf("malformed request line spaces")
+		return nil, false, fmt.Errorf("malformed request line spaces")
 	}
 	httpVersion := strings.Split(splitReqLine[2], "/")
 	if len(httpVersion) != 2 {
-		return nil, fmt.Errorf("malformed http version")
+		return nil, false, fmt.Errorf("malformed http version")
 	}
 	if httpVersion[1] != "1.1" {
-		return nil, fmt.Errorf("wrong http version")
+		return nil, false, fmt.Errorf("wrong http version")
 
 	}
 	rl := &RequestLine{
@@ -60,7 +61,7 @@ func parseRequestLine(s string) (*RequestLine, error) {
 		Method:        splitReqLine[0],
 		RequestTarget: splitReqLine[1],
 	}
-	return rl, nil
+	return rl, true, nil
 }
 
 func NewRequest() *Request {
@@ -77,90 +78,100 @@ func (r *Request) parseHeaderLines(line []byte) (int, bool, error) {
 	if idx == -1 {
 		return -1, false, nil
 	}
-	n, requestDone, err := r.Headers.Parse(line)
+	n, requestDone, err := r.Headers.Parse(line) // what are we doing n
 	if err != nil {
-		return 0, false, fmt.Errorf("couldn't parse header: %w\nn=%d\ndone=%v", err, n, requestDone)
+		return 0, false, fmt.Errorf("couldn't parse header: %w\nn = %d\ndone = %v", err, n, requestDone)
 	}
-	return idx + len(NEWLINEs), requestDone, nil
+	return n, requestDone, nil
 
 }
 
+func appendAccumulator(chunk []byte, accumulator []byte, bytesRead int, maxRead int) ([]byte, []byte, bool) {
+	remainingChunk := make([]byte, 0)
+	if bytesRead == 0 {
+		return accumulator, remainingChunk, false
+	}
+	// add to accumulator
+	idx := bytes.Index(chunk, NEWLINEb)
+	if idx == -1 {
+		// need to clean chunk here
+		accumulator = append(accumulator, chunk[:min(maxRead, bytesRead)]...)
+		return accumulator, remainingChunk, false
+	}
+	newIdk := idx + len(NEWLINEb)
+	newChunk := chunk[:newIdk]
+	accumulator = append(accumulator, newChunk...)
+	remainingChunk = append(remainingChunk, chunk[newIdk:]...)
+	return accumulator, remainingChunk, true
+}
+
+func moveState(newState int, accumulator []byte, maxRead int) (int, []byte) {
+	return newState, make([]byte, 0)
+}
+
 func RequestFromReader(reader io.Reader) (*Request, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("-------------------------------------- PANIC --------------------------------")
+			fmt.Printf("Recovery: %s", r)
+		}
+	}()
+	const MAXREAD = 8
+
 	r := new(Request)
-	chunk := make([]byte, 8) // at maximum 8 bytes will be read
+	chunk := make([]byte, MAXREAD) // at maximum 8 bytes will be read
 	bytesRead := 0
 	r.state = requestLine
-
 	r.Headers = headers.NewHeaders()
-	tempStr := ""
+	accumulator := make([]byte, 0)
+	remainingChunk := accumulator
+	var isFullLine bool
 
-Loop:
 	for {
 		n, err := reader.Read(chunk)
-		if err == io.EOF && len(tempStr) == 0 { // last chunk + EOF
-			return nil, fmt.Errorf("EOF: %w", err) // if you get EOF before r.state == done, then there has to be an error
-		}
+		// ERROR: finished reading malformed request
+		
+		// if err == io.EOF && len(accumulator) == 0 && r.state != done { // last chunk + EOF
+		// 	return nil, fmt.Errorf("EOF: %w", err) // if you get EOF before r.state == done, then there has to be an error
+		// }
 		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("failed to read chunk:=> %w", err)
 		}
 		bytesRead += n
 
+		accumulator, remainingChunk, isFullLine = appendAccumulator(chunk, accumulator, n, MAXREAD)
+
 		switch r.state {
 
 		case requestLine:
-			i := bytes.Index(chunk, []byte(NEWLINEs))
-			if i == -1 { //not found
-				tempStr += string(chunk)
-				break
-			}
-			tempStr += string(chunk)[:i+len([]byte(NEWLINEs))] // ERROR: malformed "Host: localhost:42069\r\nser-Agen"
-			r.RequestLine, err = parseRequestLine(tempStr)
+			reqLineDone := false
+			// how will this act when no newline present
+			r.RequestLine, reqLineDone, err = parseRequestLine(accumulator)
 			if err != nil {
-				return nil, fmt.Errorf("couldn't create RequestLine structure %w", err)
+				return nil, fmt.Errorf("couldn't create requestLine structure:\n %w", err)
 			}
-			tempStr = ""
-			r.state = header
+			if reqLineDone {
+				r.state, accumulator = moveState(header, accumulator, MAXREAD)
+			}
 
 		case header:
-			if n == 0 && len(tempStr) > 0 { // no new chunk but still a temp string
-				// parse left temp str
-				// which could be errnous
-				_, done, err := r.parseHeaderLines([]byte(tempStr)) // end of headers not being noticed
-				if err != nil {
-					return nil, fmt.Errorf("couldn't parse chunk: %w", err)
-				}
-				if !done {
-					return nil, fmt.Errorf("headers malformed, got the then end of request and error occured: %w", err)
 
-				}
-
-			}
-			// index to newline /r/n
-			i := bytes.Index(chunk, NEWLINEb) // New chunk not updated still contained "*/*\r\n\r\n "
-			if i == -1 {                      //not found
-				tempStr += string(chunk)
-				continue Loop
-			}
-
-			tempStr += string(chunk[:i+len(NEWLINEb)])
-			n, done, err := r.parseHeaderLines([]byte(tempStr)) // end of headers not being noticed
+			_, done, err := r.parseHeaderLines(accumulator) // end of headers not being noticed
 			if err != nil {
 				return nil, fmt.Errorf("couldn't parse chunk: %w", err)
 			}
-			if n != -1 { // newline found
-				tempStr = string(chunk[i+len(NEWLINEb):]) //remaining chunk
-			}
-			//flush chunk
-			chunk = make([]byte, 8)
 			if done {
-				tempStr = ""
-				r.state = body
-				break
+				r.state, accumulator = moveState(body, accumulator, MAXREAD)
+
+			}
+			if isFullLine {
+				// clear acc
+				accumulator = remainingChunk
 			}
 
 		case body:
 			fmt.Println("You are parsing the body now")
-			r.state = done
+			r.state, _ = moveState(done, accumulator, MAXREAD)
 			fallthrough
 
 		case done:
@@ -169,7 +180,6 @@ Loop:
 		default:
 			return nil, fmt.Errorf("mismatched Request reading states")
 		}
-
 	}
 
 }
