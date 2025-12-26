@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"http-server/internal/headers"
 	"io"
+	"strconv"
 	"strings"
+
+	"golang.org/x/text/number"
 )
 
 const NEWLINEs string = "\r\n"
@@ -14,11 +17,11 @@ var NEWLINEb = []byte(NEWLINEs)
 
 // Request States
 const (
-	initialized int = iota
-	requestLine
-	header
-	body
-	done
+	REQ_INIT int = iota
+	REQ_REQUESTLINE
+	REQ_HEADER
+	REQ_BODY
+	REQ_DONE
 )
 
 // eg GET /coffee HTTP/1.1
@@ -32,6 +35,17 @@ type Request struct {
 	RequestLine *RequestLine
 	state       int
 	Headers     headers.Headers // doesn't need to be a pointer
+	Body        []byte
+}
+
+func (r *Request) String() string {
+	rl := fmt.Sprintf("Request line:\n - Method: %s\n - Target: %s \n - Version: %s\n", r.RequestLine.Method, r.RequestLine.RequestTarget, r.RequestLine.HttpVersion)
+	var h strings.Builder
+	h.WriteString("Headers:\n")
+	for key, value := range r.Headers {
+		fmt.Fprintf(&h, "- %s: %s\n", key, value)
+	}
+	return rl + h.String()
 }
 
 // Parse and create the RequestLine which is just the first line of the whole request
@@ -67,7 +81,7 @@ func parseRequestLine(b []byte) (*RequestLine, bool, error) {
 func NewRequest() *Request {
 	return &Request{
 		RequestLine: &RequestLine{},
-		state:       initialized,
+		state:       REQ_INIT,
 		Headers:     headers.NewHeaders(),
 	}
 }
@@ -121,7 +135,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	r := new(Request)
 	chunk := make([]byte, MAXREAD) // at maximum 8 bytes will be read
 	bytesRead := 0
-	r.state = requestLine
+	r.state = REQ_REQUESTLINE
 	r.Headers = headers.NewHeaders()
 	accumulator := make([]byte, 0)
 	remainingChunk := accumulator
@@ -130,7 +144,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	for {
 		n, err := reader.Read(chunk)
 		// ERROR: finished reading malformed request
-		
+
 		// if err == io.EOF && len(accumulator) == 0 && r.state != done { // last chunk + EOF
 		// 	return nil, fmt.Errorf("EOF: %w", err) // if you get EOF before r.state == done, then there has to be an error
 		// }
@@ -143,7 +157,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		switch r.state {
 
-		case requestLine:
+		case REQ_REQUESTLINE:
 			reqLineDone := false
 			// how will this act when no newline present
 			r.RequestLine, reqLineDone, err = parseRequestLine(accumulator)
@@ -151,30 +165,40 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				return nil, fmt.Errorf("couldn't create requestLine structure:\n %w", err)
 			}
 			if reqLineDone {
-				r.state, accumulator = moveState(header, accumulator, MAXREAD)
+				r.state, accumulator = moveState(REQ_HEADER, accumulator, MAXREAD)
 			}
 
-		case header:
+		case REQ_HEADER:
 
 			_, done, err := r.parseHeaderLines(accumulator) // end of headers not being noticed
 			if err != nil {
 				return nil, fmt.Errorf("couldn't parse chunk: %w", err)
 			}
 			if done {
-				r.state, accumulator = moveState(body, accumulator, MAXREAD)
-
+				r.state, accumulator = moveState(REQ_BODY, accumulator, MAXREAD)
 			}
 			if isFullLine {
 				// clear acc
 				accumulator = remainingChunk
 			}
 
-		case body:
+		case REQ_BODY:
 			fmt.Println("You are parsing the body now")
-			r.state, _ = moveState(done, accumulator, MAXREAD)
-			fallthrough
+			// based on content length we need to add that to accumalor then add to body bytes
 
-		case done:
+			bodyLenStr, ok := r.Headers["content-length"]
+			if !ok {
+				fmt.Println("no content length found moving to done")
+				moveState(REQ_DONE, accumulator, MAXREAD)
+				break // break out of case
+			}
+			bodyLen,err :=  strconv.ParseInt(bodyLenStr,10,32) // numStr,base10,int32
+			if err!=nil{
+				
+			}
+
+		case REQ_DONE:
+			fmt.Println(r)
 			return r, nil
 
 		default:

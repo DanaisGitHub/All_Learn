@@ -25,13 +25,11 @@ func main() {
 		fmt.Println("tcp server listening")
 
 		// var lines <-chan string = getLinesChannel(tcpRequest)
-		req, err := request.RequestFromReader(tcpRequest)
+		_, err = request.RequestFromReader(tcpRequest)
 		if err != nil {
 			fmt.Printf("couldn't get ")
 			return
 		}
-
-		fmt.Println(*req)
 	}
 
 }

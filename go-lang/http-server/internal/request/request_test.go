@@ -1,6 +1,7 @@
 package request
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -8,6 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPrintingOfRequest(t *testing.T) {
+	// Test: Good GET Request line
+	str := "GET / HTTP/1.1\r\n" +
+		"Host: localhost:42069\r\n" +
+		"User-Agent: curl/7.81.0\r\n" +
+		"Accept: */*\r\n" +
+		"\r\n"
+	r, _ := RequestFromReader(strings.NewReader(str))
+	fmt.Print(r)
+}
 
 func TestRequestLineParse0(t *testing.T) {
 	// Test: Good GET Request line
