@@ -7,8 +7,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"golang.org/x/text/number"
 )
 
 const NEWLINEs string = "\r\n"
@@ -32,10 +30,12 @@ type RequestLine struct {
 }
 
 type Request struct {
-	RequestLine *RequestLine
-	state       int
-	Headers     headers.Headers // doesn't need to be a pointer
-	Body        []byte
+	RequestLine   *RequestLine
+	state         int
+	Headers       headers.Headers // doesn't need to be a pointer
+	Body          []byte
+	contentLength int
+	accumulator   []byte
 }
 
 func (r *Request) String() string {
@@ -45,7 +45,9 @@ func (r *Request) String() string {
 	for key, value := range r.Headers {
 		fmt.Fprintf(&h, "- %s: %s\n", key, value)
 	}
-	return rl + h.String()
+	b := "Body:\n"
+	b += string(r.Body)
+	return rl + h.String() + b
 }
 
 // Parse and create the RequestLine which is just the first line of the whole request
@@ -80,9 +82,11 @@ func parseRequestLine(b []byte) (*RequestLine, bool, error) {
 
 func NewRequest() *Request {
 	return &Request{
-		RequestLine: &RequestLine{},
-		state:       REQ_INIT,
-		Headers:     headers.NewHeaders(),
+		RequestLine:   &RequestLine{},
+		state:         REQ_INIT,
+		Headers:       headers.NewHeaders(),
+		contentLength: -1,
+		accumulator:   make([]byte, 0),
 	}
 }
 
@@ -100,36 +104,34 @@ func (r *Request) parseHeaderLines(line []byte) (int, bool, error) {
 
 }
 
-func appendAccumulator(chunk []byte, accumulator []byte, bytesRead int, maxRead int) ([]byte, []byte, bool) {
-	remainingChunk := make([]byte, 0)
-	if bytesRead == 0 {
-		return accumulator, remainingChunk, false
-	}
-	// add to accumulator
-	idx := bytes.Index(chunk, NEWLINEb)
-	if idx == -1 {
-		// need to clean chunk here
-		accumulator = append(accumulator, chunk[:min(maxRead, bytesRead)]...)
-		return accumulator, remainingChunk, false
-	}
-	newIdk := idx + len(NEWLINEb)
-	newChunk := chunk[:newIdk]
-	accumulator = append(accumulator, newChunk...)
-	remainingChunk = append(remainingChunk, chunk[newIdk:]...)
-	return accumulator, remainingChunk, true
+func cleanChunk(c []byte) []byte {
+	return bytes.TrimRight(c, "\x00")
 }
 
-func moveState(newState int, accumulator []byte, maxRead int) (int, []byte) {
-	return newState, make([]byte, 0)
+func appendAccumulator(chunk []byte, accumulator []byte, bytesRead int, maxRead int) ([]byte, []byte, int, bool) {
+	remainingChunk := make([]byte, 0)
+	if bytesRead == 0 {
+		return accumulator, remainingChunk, -1, false
+	}
+	accumulator = append(accumulator, cleanChunk(chunk[:min(maxRead, bytesRead)])...)
+	idx := bytes.Index(accumulator, NEWLINEb)
+	if idx == -1 { // No new line found
+		return accumulator, remainingChunk, idx, false
+	}
+	// newline found withing chunk, need both before and after newline
+	newIdk := idx + len(NEWLINEb)
+	remainingChunk = append(remainingChunk, cleanChunk(accumulator[newIdk:])...) // may contain \x00... // maybe x,y,\x00,z // i don't care not
+	accumulator = accumulator[:newIdk]
+
+	return accumulator, remainingChunk, idx, true
+}
+
+func moveState(r *Request, newState int, accumulator []byte, maxRead int) []byte {
+	r.state = newState
+	return make([]byte, 0)
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("-------------------------------------- PANIC --------------------------------")
-			fmt.Printf("Recovery: %s", r)
-		}
-	}()
 	const MAXREAD = 8
 
 	r := new(Request)
@@ -140,6 +142,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	accumulator := make([]byte, 0)
 	remainingChunk := accumulator
 	var isFullLine bool
+	//idx := -1
 
 	for {
 		n, err := reader.Read(chunk)
@@ -153,48 +156,67 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 		bytesRead += n
 
-		accumulator, remainingChunk, isFullLine = appendAccumulator(chunk, accumulator, n, MAXREAD)
+		accumulator, remainingChunk, _, isFullLine = appendAccumulator(chunk, accumulator, n, MAXREAD)
 
 		switch r.state {
 
 		case REQ_REQUESTLINE:
+			if !isFullLine {
+				break
+			}
 			reqLineDone := false
-			// how will this act when no newline present
 			r.RequestLine, reqLineDone, err = parseRequestLine(accumulator)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't create requestLine structure:\n %w", err)
 			}
-			if reqLineDone {
-				r.state, accumulator = moveState(REQ_HEADER, accumulator, MAXREAD)
+			if !reqLineDone {
+				return nil, fmt.Errorf("request line malformed, first line couldn't be parsed as a line: %w", err)
 			}
+			accumulator = moveState(r, REQ_HEADER, accumulator, MAXREAD)
+			accumulator = remainingChunk
 
 		case REQ_HEADER:
-
+			if idxAcc := bytes.Index(accumulator, NEWLINEb); idxAcc == 0 {
+				accumulator = moveState(r, REQ_BODY, accumulator, MAXREAD)
+				accumulator = remainingChunk
+				break
+			}
+			if !isFullLine {
+				break
+			}
 			_, done, err := r.parseHeaderLines(accumulator) // end of headers not being noticed
 			if err != nil {
 				return nil, fmt.Errorf("couldn't parse chunk: %w", err)
 			}
-			if done {
-				r.state, accumulator = moveState(REQ_BODY, accumulator, MAXREAD)
+			if cntLenStr, ok := r.Headers["content-length"]; ok {
+				cntLen, err := strconv.ParseInt(cntLenStr, 10, 32)
+				if err != nil {
+					return nil, fmt.Errorf("content-length not properly formatted, it should be a number: %w", err)
+				}
+				r.contentLength = int(cntLen)
 			}
-			if isFullLine {
-				// clear acc
-				accumulator = remainingChunk
+			if done && r.contentLength != -1 {
+				accumulator = moveState(r, REQ_BODY, accumulator, MAXREAD)
 			}
+			if done && r.contentLength == -1 {
+				fmt.Println("no content length found moving to done")
+				accumulator = moveState(r, REQ_DONE, accumulator, MAXREAD)
+			}
+
+			accumulator = remainingChunk
 
 		case REQ_BODY:
-			fmt.Println("You are parsing the body now")
-			// based on content length we need to add that to accumalor then add to body bytes
-
-			bodyLenStr, ok := r.Headers["content-length"]
-			if !ok {
-				fmt.Println("no content length found moving to done")
-				moveState(REQ_DONE, accumulator, MAXREAD)
-				break // break out of case
-			}
-			bodyLen,err :=  strconv.ParseInt(bodyLenStr,10,32) // numStr,base10,int32
-			if err!=nil{
-				
+			if err == io.EOF {
+				cntLen := r.contentLength
+				accumulator = append(accumulator, cleanChunk(remainingChunk)...)
+				r.Body = append(r.Body, accumulator...)
+				bodyLen := len(r.Body)
+				if bodyLen > cntLen {
+					return r, fmt.Errorf("content length is too small for actual content length\n acclaimedLength = %d, real length = %d \n%w", cntLen, bodyLen, err)
+				} else if cntLen > bodyLen {
+					return r, fmt.Errorf("content length is too large for actual content length\n acclaimedLength = %d, real length = %d \n%w", cntLen, bodyLen, err)
+				}
+				accumulator = moveState(r, REQ_DONE, accumulator, MAXREAD)
 			}
 
 		case REQ_DONE:

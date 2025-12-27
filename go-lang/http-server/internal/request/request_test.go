@@ -10,6 +10,61 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type chunkReader struct {
+	data            string
+	numBytesPerRead int
+	pos             int
+}
+
+func TestBodyParsingo(t *testing.T) {
+	str := "POST /coffee HTTP/1.1\r\n" +
+		"Host: localhost:42069\r\n" +
+		"User-Agent: curl/8.4.0\r\n" +
+		"Accept: */*\r\n" +
+		"Content-Type: application/json\r\n" +
+		"Content-Length: 39\r\n" +
+		"\r\n" +
+		`{"type": "dark mode", "size": "medium"}`
+	// Test: Standard Body
+	reader := &chunkReader{
+		data:            str,
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, `{"type": "dark mode", "size": "medium"}`, string(r.Body))
+}
+
+func TestBodyParsingTo(t *testing.T) {
+	str := "POST /submit HTTP/1.1\r\n" +
+		"Host: localhost:42069\r\n" +
+		"Content-Length: 13\r\n" +
+		"\r\n" +
+		"hello world!\n"
+	// Test: Standard Body
+	reader := &chunkReader{
+		data:            str,
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "hello world!\n", string(r.Body))
+
+	// Test: Body shorter than reported content length
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:42069\r\n" +
+			"Content-Length: 20\r\n" +
+			"\r\n" +
+			"partial content",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+}
+
 func TestPrintingOfRequest(t *testing.T) {
 	// Test: Good GET Request line
 	str := "GET / HTTP/1.1\r\n" +
@@ -151,12 +206,6 @@ func TestHeaders(t *testing.T) {
 	}
 	r, err = RequestFromReader(reader)
 	require.Error(t, err)
-}
-
-type chunkReader struct {
-	data            string
-	numBytesPerRead int
-	pos             int
 }
 
 // Read reads up to len(p) or numBytesPerRead bytes from the string per call

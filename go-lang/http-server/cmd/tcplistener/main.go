@@ -23,7 +23,6 @@ func main() {
 			fmt.Println("couldn't accept: ", err)
 		}
 		fmt.Println("tcp server listening")
-
 		// var lines <-chan string = getLinesChannel(tcpRequest)
 		_, err = request.RequestFromReader(tcpRequest)
 		if err != nil {
