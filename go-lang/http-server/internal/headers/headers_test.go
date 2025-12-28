@@ -15,7 +15,8 @@ func TestHeaderWith1NormalFieldValPair(t *testing.T) {
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers.Get("hOsT"))
+	host,_:=headers.Get("hOsT")
+	assert.Equal(t, "localhost:42069", host)
 	assert.Equal(t, 25, n)
 	assert.True(t, done)
 
@@ -35,8 +36,10 @@ func TestHeaderWithMultiNormalFieldValPair(t *testing.T) {
 	_, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers.Get("hosT"))
-	assert.Equal(t, "Bar", headers.Get("FOO"))
+	host,_:=headers.Get("hosT")
+	foo,_:=headers.Get("FOO")
+	assert.Equal(t, "localhost:42069",host)
+	assert.Equal(t, "Bar", foo)
 	//assert.Equal(t, 23, n)
 	assert.True(t, done)
 }
@@ -58,7 +61,10 @@ func TestMalformed(t *testing.T) {
 	headers := NewHeaders()
 	data := []byte("Host     \r\n\r\n")
 	n, done, err := headers.Parse(data)
-	require.Error(t, err)
+	require.Error(t, // malformed requestLine
+// min requestLine
+// max requestLine
+err)
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 }
@@ -71,7 +77,16 @@ func TestMutlipleHeaders(t *testing.T) {
 	_, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069, Bar", headers.Get("hosT"))
+	host ,_:= headers.Get("hosT")
+	assert.Equal(t, "localhost:42069, Bar", host)
 	//assert.Equal(t, 23, n)
 	assert.True(t, done)
 }
+
+
+
+
+
+// malformed requestLine
+// min requestLine
+// max requestLine

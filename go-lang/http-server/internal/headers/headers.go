@@ -13,7 +13,7 @@ type Headers map[string]string
 
 // returns the value of specific header field
 //   - if none will return empty string
-func (h Headers) Get(field string) string {
+func (h Headers) Get(field string) (string,bool) {
 	keys := make([]string, 0, len(h))
 	for k := range h {
 		keys = append(keys, k)
@@ -21,9 +21,9 @@ func (h Headers) Get(field string) string {
 	fmt.Println(keys)
 	value, ok := h[strings.ToLower(field)]
 	if !ok {
-		return ""
+		return "",false
 	}
-	return value
+	return value,true
 }
 
 // will create a new header with a value or will append the key with new value and comma

@@ -24,21 +24,19 @@ func main() {
 		}
 		fmt.Println("tcp server listening")
 		// var lines <-chan string = getLinesChannel(tcpRequest)
-		_, err = request.RequestFromReader(tcpRequest)
+		r, err := request.RequestFromReader(tcpRequest)
 		if err != nil {
 			fmt.Printf("couldn't get ")
 			return
 		}
+		fmt.Println(r)
 	}
-
 }
 
 func getLinesChannel(f io.ReadCloser) <-chan string {
-
 	chanString := make(chan string, 1)
 	go func() {
 		defer close(chanString)
-
 		eightB := make([]byte, 8)
 		var fullLine []byte
 		for {
@@ -52,7 +50,6 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 				}
 				fmt.Printf("couidn't read 8 bytes: %v", err)
 			}
-
 			// for each char in the 8- bytes
 			for i := range n {
 				char := eightB[i]
@@ -65,6 +62,5 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 			}
 		}
 	}()
-
 	return chanString // returning an open channel to main routine, whilst go-routine calculates, time is the same bu
 }
