@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"http-server/internal/headers"
-	"http-server/internal/requestLine"
+	rl "http-server/internal/requestLine"
 	"io"
 	"strconv"
 	"strings"
@@ -25,7 +25,7 @@ const (
 // eg GET /coffee HTTP/1.1
 
 type Request struct {
-	RequestLine          *requestline.RequestLine
+	RequestLine          *rl.RequestLine
 	state                int
 	Headers              headers.Headers // doesn't need to be a pointer
 	Body                 []byte
@@ -54,7 +54,7 @@ func (r *Request) String() string {
 
 func NewRequest() *Request {
 	return &Request{
-		RequestLine:   requestline.NewRequestLine(),
+		RequestLine:   rl.NewRequestLine(),
 		state:         REQ_REQUESTLINE,
 		Headers:       headers.NewHeaders(),
 		contentLength: 0,
@@ -107,12 +107,10 @@ func moveState(r *Request, newState int) {
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	const MAXREAD = 8
-
 	r := NewRequest()
 	chunk := make([]byte, MAXREAD) // at maximum 8 bytes will be read
 	bytesRead := 0
 	var isFullLine bool
-
 	for {
 		n, err := reader.Read(chunk)
 		if err != nil && err != io.EOF {
@@ -128,7 +126,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				break
 			}
 			reqLineDone := false
-			r.RequestLine, reqLineDone, err = requestline.ParseRequestLine(r.accumulator, NEWLINEs)
+			r.RequestLine, reqLineDone, err = rl.ParseRequestLine(r.accumulator, NEWLINEs)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't create requestLine structure:\n %w", err)
 			}
@@ -158,12 +156,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			}
 			if done && r.contentLength != -1 {
 				moveState(r, REQ_BODY)
-
-			}
-			if done && r.contentLength == -1 {
+			}else if done && r.contentLength == -1 {
 				fmt.Println("no content length found moving to done")
 				moveState(r, REQ_DONE)
 			}
+
 			r.accumulator = r.remainingAccumulator
 			r.remainingAccumulator = make([]byte, 0)
 
@@ -179,13 +176,13 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 					return r, fmt.Errorf("content length is too large for actual content length\n acclaimedLength = %d, real length = %d \n%w", cntLen, bodyLen, err)
 				}
 				moveState(r, REQ_DONE)
-
 			}
 
 		case REQ_DONE:
 			return r, nil
+
 		default:
-			return nil, fmt.Errorf("mismatched Request reading states")
+			return nil, fmt.Errorf("mismatched request reading states")
 		}
 	}
 

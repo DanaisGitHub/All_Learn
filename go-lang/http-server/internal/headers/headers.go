@@ -18,7 +18,6 @@ func (h Headers) Get(field string) (string,bool) {
 	for k := range h {
 		keys = append(keys, k)
 	}
-	fmt.Println(keys)
 	value, ok := h[strings.ToLower(field)]
 	if !ok {
 		return "",false
