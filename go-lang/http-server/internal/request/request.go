@@ -111,13 +111,15 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	chunk := make([]byte, MAXREAD) // at maximum 8 bytes will be read
 	bytesRead := 0
 	var isFullLine bool
-	for {
+	var tempContentLength int
+
+	for { // assumed to always be reading, it should stop reading when stopped
+
 		n, err := reader.Read(chunk)
 		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("failed to read chunk:=> %w", err)
 		}
 		bytesRead += n
-
 		_, isFullLine = newLineParser(r, chunk, n, MAXREAD)
 
 		switch r.state {
@@ -134,13 +136,10 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				return nil, fmt.Errorf("request line malformed, first line couldn't be parsed as a line: %w", err)
 			}
 			moveState(r, REQ_HEADER)
+			break
 
 		case REQ_HEADER:
-			if idxAcc := bytes.Index(r.accumulator, NEWLINEb); idxAcc == 0 {
-				moveState(r, REQ_BODY)
-				break
-			}
-			if !isFullLine {
+			if idx := bytes.Index(r.accumulator, NEWLINEb); !isFullLine && idx != 0 {
 				break
 			}
 			_, done, err := r.parseHeaderLines(r.accumulator) // end of headers not being noticed
@@ -153,36 +152,47 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 					return nil, fmt.Errorf("content-length not properly formatted, it should be a number: %w", err)
 				}
 				r.contentLength = int(cntLen)
+				tempContentLength = r.contentLength
 			}
-			if done && r.contentLength != -1 {
-				moveState(r, REQ_BODY)
-			}else if done && r.contentLength == -1 {
-				fmt.Println("no content length found moving to done")
-				moveState(r, REQ_DONE)
-			}
+			if done {
+				if r.contentLength > 0 {
+					tempContentLength = r.contentLength
+					moveState(r, REQ_BODY)
+				} else { // when there's no body for some reason this isn't being called
+					fmt.Println("no content length found moving to done")
+					moveState(r, REQ_DONE)
+					return r, nil
+				}
 
-			r.accumulator = r.remainingAccumulator
-			r.remainingAccumulator = make([]byte, 0)
+			} else {
+				r.accumulator = r.remainingAccumulator
+				r.remainingAccumulator = make([]byte, 0)
+			}
+			break
 
 		case REQ_BODY:
-			if err == io.EOF {
-				cntLen := r.contentLength
-				r.accumulator = append(r.accumulator, cleanChunk(r.remainingAccumulator)...)
-				r.Body = append(r.Body, r.accumulator...)
-				bodyLen := len(r.Body)
-				if bodyLen > cntLen {
-					return r, fmt.Errorf("content length is too small for actual content length\n acclaimedLength = %d, real length = %d \n%w", cntLen, bodyLen, err)
-				} else if cntLen > bodyLen {
-					return r, fmt.Errorf("content length is too large for actual content length\n acclaimedLength = %d, real length = %d \n%w", cntLen, bodyLen, err)
-				}
-				moveState(r, REQ_DONE)
-			}
+			// NEED finish body based of content length
+			tempContentLength -= len(r.accumulator)
+			r.Body = append(r.Body, r.accumulator...)
 
-		case REQ_DONE:
-			return r, nil
+			if tempContentLength <= 0 || n <= 0 {
+
+				fmt.Println("reached REQ_DONE")
+				bodyLen := len(r.Body)
+				moveState(r, REQ_DONE)
+				if bodyLen > r.contentLength {
+					return r, fmt.Errorf("content length is too small for actual content length\n acclaimedLength = %d, real length = %d \n%w", r.contentLength, bodyLen, err)
+				} else if bodyLen < r.contentLength {
+					return r, fmt.Errorf("content length is too large for actual content length\n acclaimedLength = %d, real length = %d \n%w", r.contentLength, bodyLen, err)
+				}
+				return r, nil
+			}
+			r.accumulator = make([]byte, 0)
+			break
 
 		default:
 			return nil, fmt.Errorf("mismatched request reading states")
+			break
 		}
 	}
 

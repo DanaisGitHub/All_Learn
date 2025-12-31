@@ -39,48 +39,43 @@ func Serve(port int) (*Server, error) {
 		closeBool: atomic.Bool{},
 		port:      port,
 	}
-	go func() {
-		err := s.listen()
-		if err != nil {
-			panic(err)
-		}
-	}()
+	go s.listen()
+
 	return s, nil
 }
 
 func (s *Server) Close() error {
 	s.state = STATE_CLOSED
 	s.closeBool.Store(true)
-	return s.Listener.Close()
-}
-
-func (s *Server) listen() error {
-	handle := func(conn net.Conn) {
-		err := s.handle(conn)
-		if err != nil {
-			fmt.Printf("couldn't handle request because: %v", err.Error())
-		}
-	}
-
-	fmt.Printf("server open and listening on port %d\n", s.port)
-	s.state = STATE_LISTENING
-	for !s.closeBool.Load() { // whilst false keep going
-		conn, err := s.Listener.Accept()
-		if err != nil {
-			return err
-		}
-		go handle(conn)
+	err := s.Listener.Close()
+	if err != nil {
+		return fmt.Errorf("couldn't close server %v because: %w", s, err)
 	}
 	return nil
 }
 
+func (s *Server) listen() {
+	s.state = STATE_LISTENING
+	for !s.closeBool.Load() { // whilst false keep going
+		conn, err := s.Listener.Accept()
+		if err != nil {
+			panic(err)
+		}
+		go func(conn net.Conn) {
+			err := s.handle(conn)
+			if err != nil {
+				fmt.Printf("couldn't handle request because: %v", err.Error())
+			}
+		}(conn)
+	}
+}
+
 func (s *Server) handle(conn net.Conn) error {
 	// Read
-	r, err := request.RequestFromReader(conn)
+	_, err := request.RequestFromReader(conn)
 	if err != nil {
 		return fmt.Errorf("error handling singular conn: %v\nerror:=%w", conn, err)
 	}
-	fmt.Println(r)
 
 	// Time
 	statusCode64, err := strconv.ParseInt("200", 10, 64)
